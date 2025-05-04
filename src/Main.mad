@@ -1,0 +1,26 @@
+import type { Maybe } from "Maybe"
+
+import type { Action, Actor, Behavior, Predicate, Weighting } from "@/Actor"
+
+import { always, identity } from "Function"
+import IO from "IO"
+import { Just, Nothing, fromMaybe } from "Maybe"
+
+import { Actor, Habit, Instinct, act, posit, weightedAct } from "@/Actor"
+
+
+
+main = () => {
+  hunger = Instinct(
+    "hunger",
+    (x) => x != "pizza",
+    (thing) => thing == "sandwich" ? 1 : thing == "pizza" ? 0 : 0.2,
+    always("crumbs"),
+  )
+  deliver = Instinct("deliver", always(true), always(1), identity)
+  // sandoman = Actor("sandoman", [hunger], Just("sandwich"))
+  pipe(
+    weightedAct([hunger, deliver]),
+    IO.pTrace("sandwiches and human:"),
+  )(Just("sandwich"))
+}

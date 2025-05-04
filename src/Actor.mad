@@ -1,0 +1,89 @@
+import type { Either } from "Either"
+import type { Maybe } from "Maybe"
+
+import Dict from "Dictionary"
+import { Left, Right } from "Either"
+import List from "List"
+import { Just, Nothing, fromMaybe } from "Maybe"
+
+
+
+export alias Predicate e = e -> Boolean
+export alias Action e z = e -> z
+export alias Weighting e = e -> Float
+
+export type Behavior e z
+  = Instinct(
+    // name
+    String,
+    // check
+    Predicate e,
+    // weigh
+    Weighting e,
+    // run
+    Action e z,
+  )
+  | Habit(
+    // name
+    String,
+    // check
+    Predicate e,
+    // weigh
+    Weighting e,
+    // run
+    Behavior e z,
+  )
+
+export type Subjective e z = Subjective(Behavior e z, Maybe e)
+
+
+export type Actor e z
+  = Actor(
+    // name
+    String,
+    // potential actions
+    List (Behavior e z),
+  )
+
+act :: Behavior a b -> Maybe a -> Either String b
+export act = (action, subject) => where(#[action, subject]) {
+  #[Instinct(name, check, weigh, run), Just(ref)] =>
+    check(ref) ? Right(run(ref)) : Left(name)
+
+  #[Instinct(name, check, weigh, run), Nothing] =>
+    Left(name)
+
+  #[Habit(name, check, weigh, subactions), _] =>
+    act(subactions, subject)
+}
+
+applyBehavior = (a, b) => where(b) {
+  Instinct(name, check, weigh, _) =>
+    check(a) ? #[weigh(a), name] : #[0, name]
+
+  Habit(name, check, weigh, _) =>
+    check(a) ? #[weigh(a), name] : #[0, name]
+}
+
+posit :: List (Behavior a b) -> Maybe a -> Maybe (List #[Float, String])
+export posit = (actions, subject) => where(subject) {
+  Just(a) =>
+    Just(map(applyBehavior(a), actions))
+
+  Nothing =>
+    Nothing
+}
+
+weightedAct :: List (Behavior a b) -> Maybe a -> Maybe (Dictionary Float (List String))
+export weightedAct = (actions, subject) => pipe(
+  posit(actions),
+  map(
+    List.reduce(
+      (dict, weighted) => where(weighted) {
+        #[w, x] =>
+          Dict.includes(w, dict) ? Dict.update(List.append(x), w, dict) : Dict.insert(w, [x], dict)
+      },
+      Dict.empty,
+    ),
+  ),
+)(subject)
