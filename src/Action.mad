@@ -1,0 +1,100 @@
+import type { Either } from "Either"
+import type { Maybe } from "Maybe"
+
+import Dict from "Dictionary"
+import { Left, Right } from "Either"
+import List from "List"
+import { Just, Nothing, fromMaybe } from "Maybe"
+
+
+
+// Unary condition as a type
+export alias Predicate e = e -> Boolean
+
+// Actions produce a value
+export alias Producer e z = e -> z
+
+// Weighting produces a floating value
+export alias Weighting e = e -> Float
+
+export type Action e z = Action(String, Predicate e, Weighting e, Producer e z)
+export type Subjective e z = Subjective(Action e z, Maybe e)
+
+// Action::name
+// get the name of an Action
+export name = where {
+  Action(n, _, _, _) =>
+    n
+}
+
+// Action::will
+// get the predicate of an Action
+export will = where {
+  Action(_, c, _, _) =>
+    c
+}
+
+// Action::weight
+// get the weighing function of an Action
+export weight = where {
+  Action(_, _, w, _) =>
+    w
+}
+
+// Action::runner
+// get the producer of an Action
+export runner = where {
+  Action(_, _, _, r) =>
+    r
+}
+
+
+// methods
+
+// take an Action and a possible subject and apply it if valid
+effect :: Action a b -> Maybe a -> Either String b
+export effect = (action, subject) => where(#[action, subject]) {
+  #[Action(_name, check, _, produce), Just(ref)] =>
+    check(ref) ? Right(produce(ref)) : Left(_name)
+
+  #[Action(n, _, _, _), Nothing] =>
+    Left(n)
+}
+
+// TODO: right now there's nothing which bounds actions so weights are actually arbitrary
+// but we should eventually make them 0 <= x <= 1
+weighSubject :: a -> Action a b -> #[Float, String]
+export weighSubject = (a, b) => where(b) {
+  Action(_name, check, weigh, _) =>
+    #[check(a) ? weigh(a) : 0, _name]
+}
+
+posit :: Maybe a -> List (Action a b) -> Maybe (List #[Float, String])
+export posit = (subject, actions) => where(subject) {
+  Just(a) =>
+    Just(map(weighSubject(a), actions))
+
+  Nothing =>
+    Nothing
+}
+
+alias Playbook = Dictionary Float (List String)
+
+consider :: Playbook -> #[Float, String] -> Playbook
+export consider = (dict, weighted) => where(weighted) {
+  #[w, x] =>
+    (
+      // if we have it
+      Dict.includes(w, dict)
+        ? // update the entry
+        Dict.update(List.append(x), w, dict)
+        : // or jam a new one
+        Dict.insert(w, [x], dict)
+    )
+}
+
+playbook :: List (Action a b) -> Maybe a -> Maybe Playbook
+export playbook = (actions, subject) => pipe(
+  posit(subject),
+  map(List.reduce(consider, Dict.empty)),
+)(actions)

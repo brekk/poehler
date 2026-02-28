@@ -1,0 +1,79 @@
+import Dict from "Dictionary"
+import { Left, Right } from "Either"
+import { always } from "Function"
+import { Just, Nothing, fromMaybe, isJust } from "Maybe"
+import { assertEquals, test } from "Test"
+
+import { caseN2, report } from "Study"
+
+import Action from "@/Action"
+
+
+
+K = always
+
+yes = K(true)
+no = K(false)
+
+one = (_) => 1.0
+
+sampleAction = Action.Action($, $, one, $)
+
+comatose = sampleAction("sleep", yes, K("sleeping"))
+noMagic = sampleAction("magic", no, K("magical"))
+yesMagic = sampleAction("magic", yes, K("magical"))
+
+report(Action.name, "Action::name", [#[comatose, "sleep"], #[noMagic, "magic"]])
+
+report(Action.will, "Action::will", [#[comatose, yes], #[noMagic, no]])
+
+report(Action.weight, "Action::weight", [#[comatose, one], #[noMagic, one]])
+
+report(
+  pipe(
+    Action.runner,
+    (fn) => fn("hooray"),
+  ),
+  "Action::runner (with fixture)",
+  [#[comatose, "sleeping"], #[noMagic, "magical"]],
+)
+
+testAct = report(caseN2(Action.effect))
+
+testAct("Action.act - Instincts do nothing with Nothing", [#[#[comatose, Nothing], Left("sleep")]])
+testAct(
+  "Action.act - Instincts apply to Just values that match a predicate",
+  [#[#[comatose, Just("Rip Van Winkle")], Right("sleeping")]],
+)
+testAct(
+  "Action.act - Instincts don't apply when a predicate fails",
+  [#[#[noMagic, Just("Some Guy")], Left("magic")]],
+)
+
+report(
+  Action.weighSubject("whatever"),
+  "Action.weighSubject",
+  [#[comatose, #[1.0, "sleep"]], #[noMagic, #[0, "magic"]]],
+)
+
+report(
+  caseN2(Action.posit),
+  "Action.posit",
+  [
+    #[#[Just("thing"), [comatose, noMagic]], Just([#[1, "sleep"], #[0, "magic"]])],
+    #[#[Nothing, [comatose, noMagic]], Nothing],
+  ],
+)
+
+// this is still shitty because the output values should actually all add up to 1
+report(
+  caseN2(Action.playbook),
+  "Action.playbook",
+  [
+    #[#[[], Nothing], Nothing],
+    #[
+      #[[comatose, noMagic, yesMagic], Just("cool")],
+      Just({{ 0: ["magic"], 1: ["sleep", "magic"] }}),
+    ],
+  ],
+)

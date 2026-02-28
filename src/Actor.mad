@@ -1,127 +1,21 @@
-import type { Either } from "Either"
 import type { Maybe } from "Maybe"
 
-import Dict from "Dictionary"
-import { Left, Right } from "Either"
-import List from "List"
-import { Just, Nothing, fromMaybe } from "Maybe"
+import type { Action } from "@/Action"
+
+import Action from "@/Action"
 
 
-
-// Unary condition as a type
-export alias Predicate e = e -> Boolean
-
-// Actions produce a value
-export alias Action e z = e -> z
-
-// Weighting produces a floating value
-export alias Weighting e = e -> Float
-
-export type Behavior e z
-  = Instinct(String, Predicate e, Weighting e, Action e z)
-  // not clear yet if Habit is actually valuable?
-  | Habit(String, Predicate e, Weighting e, Behavior e z)
-
-export type Subjective e z = Subjective(Behavior e z, Maybe e)
-
-// accessors
-
-export name = where {
-  Instinct(n, _, _, _) =>
-    n
-
-  Habit(n, _, _, _) =>
-    n
-}
-
-export will = where {
-  Instinct(_, c, _, _) =>
-    c
-
-  Habit(_, c, _, _) =>
-    c
-}
-
-export weight = where {
-  Instinct(_, _, w, _) =>
-    w
-
-  Habit(_, _, w, _) =>
-    w
-}
-
-export runner = where {
-  Instinct(_, _, _, r) =>
-    Just(r)
-
-  _ =>
-    Nothing
-}
-
-export routine = where {
-  Habit(_, _, _, r) =>
-    Just(r)
-
-  _ =>
-    Nothing
-}
-
-// methods
-
-act :: Behavior a b -> Maybe a -> Either String b
-export act = (action, subject) => where(#[action, subject]) {
-  #[Instinct(n, c, w, r), Just(ref)] =>
-    c(ref) ? Right(r(ref)) : Left(n)
-
-  #[Instinct(n, c, w, r), Nothing] =>
-    Left(n)
-
-  #[Habit(n, c, w, s), _] =>
-    act(s, subject)
-}
-
-// apply a behavior to a subject
-applyBehavior = (a, b) => where(b) {
-  Instinct(n, c, w, _) =>
-    c(a) ? #[w(a), n] : #[0, n]
-
-  Habit(n, c, w, _) =>
-    c(a) ? #[w(a), n] : #[0, n]
-}
-
-posit :: List (Behavior a b) -> Maybe a -> Maybe (List #[Float, String])
-export posit = (actions, subject) => where(subject) {
-  Just(a) =>
-    Just(map(applyBehavior(a), actions))
-
-  Nothing =>
-    Nothing
-}
-
-weightedAct :: List (Behavior a b) -> Maybe a -> Maybe (Dictionary Float (List String))
-export weightedAct = (actions, subject) => pipe(
-  posit(actions),
-  map(
-    List.reduce(
-      (dict, weighted) => where(weighted) {
-        #[w, x] =>
-          Dict.includes(w, dict) ? Dict.update(List.append(x), w, dict) : Dict.insert(w, [x], dict)
-      },
-      Dict.empty,
-    ),
-  ),
-)(subject)
 
 export type Actor e z
   = Actor(
     // name
     String,
     // potential actions
-    List (Behavior e z),
+    List (Action e z),
   )
 
 behave :: Maybe a -> Actor a b -> Maybe (Dictionary Float (List String))
 export behave = (subject, actor) => where(actor) {
   Actor(actorName, behaviors) =>
-    weightedAct(behaviors, subject)
+    Action.playbook(behaviors, subject)
 }
