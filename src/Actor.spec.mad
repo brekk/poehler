@@ -1,0 +1,80 @@
+import { Left, Right } from "Either"
+import { always } from "Function"
+import { Just, Nothing, fromMaybe, isJust } from "Maybe"
+import { assertEquals, test } from "Test"
+
+import { caseN2, report } from "Study"
+
+import Actor from "@/Actor"
+
+
+
+yes = always(true)
+no = always(false)
+
+one = (_) => 1.0
+
+comatose = Actor.Instinct("sleep", yes, one, always("sleeping"))
+noMagic = Actor.Instinct("magic", no, one, always("magical"))
+yesMagic = Actor.Instinct("magic", yes, one, always("magical"))
+artPractice = Actor.Habit("artmaking", yes, one, yesMagic)
+
+report(
+  Actor.name,
+  "Actor::name",
+  [#[comatose, "sleep"], #[noMagic, "magic"], #[artPractice, "artmaking"]],
+)
+
+report(
+  Actor.will,
+  "Actor::will",
+  [#[comatose, yes], #[noMagic, no], #[artPractice, yes], #[yesMagic, yes]],
+)
+
+report(
+  Actor.weight,
+  "Actor::weight",
+  [#[comatose, one], #[noMagic, one], #[artPractice, one], #[yesMagic, one]],
+)
+
+
+report(
+  pipe(
+    Actor.runner,
+    fromMaybe(always("failure")),
+    (fn) => fn("fun"),
+  ),
+  "Actor::runner (with fixture)",
+  [#[comatose, "sleeping"], #[artPractice, "failure"]],
+)
+
+
+report(
+  pipe(
+    Actor.routine,
+    isJust,
+  ),
+  "Actor::routine (with fixture)",
+  [#[comatose, false], #[artPractice, true]],
+)
+
+
+
+testAct = report(caseN2(Actor.act))
+
+testAct("Actor.act - Instincts do nothing with Nothing", [#[#[comatose, Nothing], Left("sleep")]])
+
+testAct(
+  "Actor.act - Instincts apply to Just values that match a predicate",
+  [#[#[comatose, Just("Rip Van Winkle")], Right("sleeping")]],
+)
+
+testAct(
+  "Actor.act - Instincts don't apply when a predicate fails",
+  [#[#[noMagic, Just("Some Guy")], Left("magic")]],
+)
+
+testAct(
+  "Actor.act - Habits apply subactions",
+  [#[#[artPractice, Just("James Jean")], Right("magical")]],
+)

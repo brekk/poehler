@@ -2,25 +2,70 @@ import type { Maybe } from "Maybe"
 
 import type { Action, Actor, Behavior, Predicate, Weighting } from "@/Actor"
 
-import { always, identity } from "Function"
+import Dict from "Dictionary"
+import { always, identity, ifElse } from "Function"
 import IO from "IO"
+import List from "List"
 import { Just, Nothing, fromMaybe } from "Maybe"
+import String from "String"
 
-import { Actor, Habit, Instinct, act, posit, weightedAct } from "@/Actor"
+import { Actor, Habit, Instinct, act, behave, posit, weightedAct } from "@/Actor"
 
 
+
+K = always
 
 main = () => {
-  hunger = Instinct(
-    "hunger",
-    (x) => x != "pizza",
-    (thing) => thing == "sandwich" ? 1 : thing == "pizza" ? 0 : 0.2,
-    always("crumbs"),
+  // uhhhhh
+  // goats can eat
+  // goats can make new goats
+  // goats can shit
+  // goats can sleep
+
+  // (maybe not for now)
+  // goats can die 
+  // goats can seek comfort relative to stimulus
+
+  everybodyPoops = Instinct(
+    "shit",
+    ifElse(String.isEmpty, K(false), K(true)),
+    ifElse(String.isEmpty, K(0), K(0.5)),
+    always("poop"),
   )
-  deliver = Instinct("deliver", always(true), always(1), identity)
+
+  // right now our "goat" operates on strings only
+  goat = Actor(
+    "goaty mcgoatface",
+    [
+      Instinct(
+        "hunger",
+        (x) => x != "big rocks",
+        (thing) => thing == "sandwich" ? 1 : thing == "big rocks" ? 0 : 0.2,
+        always("crumbs"),
+      ),
+      Instinct(
+        "sex",
+        String.contains("goat"),
+        (name) => String.length(name) / 20,
+        (name) => name ++ "-goat",
+      ),
+      everybodyPoops,
+      Instinct("sleep", () => true, () => 0.5, identity),
+    ],
+  )
+
   // sandoman = Actor("sandoman", [hunger], Just("sandwich"))
   pipe(
-    weightedAct([hunger, deliver]),
-    IO.pTrace("sandwiches and human:"),
-  )(Just("sandwich"))
+    map(Just),
+    map(
+      pipe(
+        behave($, goat),
+        IO.pTrace("how do goats behave?"),
+        map(Dict.toList),
+        chain(List.last),
+        IO.pTrace("final final"),
+      ),
+    ),
+    IO.pTrace("out"),
+  )(["another goat", "sandwich", "pizza", "big rocks"])
 }
